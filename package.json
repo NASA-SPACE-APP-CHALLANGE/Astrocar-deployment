@@ -1,0 +1,73 @@
+{
+  "name": "astrocare",
+  "version": "2.0.0",
+  "description": "AstroCare — Astronaut Health Monitoring and Spaceflight Risk Management System (NASA Space Apps Challenge)",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.cjs",
+    "dev:backend": "node backend/server.cjs",
+    "dev:frontend": "npm run --prefix frontend dev",
+    "build": "npm run --prefix frontend build",
+    "lint": "npm run --prefix frontend lint",
+    "typecheck": "npm run --prefix frontend typecheck",
+    "test": "node scripts/test.cjs",
+    "clean": "node scripts/clean.cjs",
+    "desktop": "node desktop/start.cjs",
+    "package:linux": "node scripts/package-linux.cjs",
+    "package:windows": "node scripts/package-windows.cjs",
+    "package:mac": "node scripts/package-mac.cjs",
+    "package:all": "node scripts/package-all.cjs"
+  },
+  "build": {
+    "appId": "org.nasa.spaceapps.astrocare",
+    "productName": "AstroCare",
+    "copyright": "Copyright © 2026 AstroCare Biomedical Engineering Team",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "frontend/dist/**/*",
+      "backend/**/*",
+      "desktop/**/*",
+      "database/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Science",
+      "icon": "frontend/public/favicon.svg"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "frontend/public/favicon.svg"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.medical",
+      "icon": "frontend/public/favicon.svg"
+    }
+  },
+  "keywords": [
+    "nasa",
+    "space-apps-challenge",
+    "astronaut-health",
+    "telemetry",
+    "biomedical",
+    "csa",
+    "isolation-forest",
+    "spaceflight"
+  ],
+  "author": "AstroCare Team",
+  "license": "MIT"
+}
