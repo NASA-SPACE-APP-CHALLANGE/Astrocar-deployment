@@ -6,7 +6,8 @@ import type {
     MissionReport, LoginResponse, SimulatorStatus, User
 } from '@/types';
 
-const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api';
+const rawBase = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
+const BASE = rawBase ? `${rawBase}/api` : '/api';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
     const res = await fetch(url, options);

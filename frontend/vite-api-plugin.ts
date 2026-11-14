@@ -438,6 +438,100 @@ const anomaliesDb: Record<string, any[]> = {
     ],
 };
 
+function generateAnomaliesForAstronaut(astronautId: string, contamination = 0.05) {
+    const astro = astronautsDb[astronautId] || {
+        baseline_heart_rate: 62.0,
+        baseline_spo2: 98.2,
+        baseline_body_temp: 36.6,
+        baseline_systolic_bp: 118.0,
+        baseline_diastolic_bp: 76.0,
+    };
+
+    const targetCount = Math.max(3, Math.min(10, Math.round(500 * Math.max(0.02, contamination) * 0.4)));
+    const runId = 'RUN-' + Math.floor(1000 + Math.random() * 9000);
+
+    const candidates = [
+        {
+            metric: 'heart_rate', unit: 'bpm',
+            value: +(astro.baseline_heart_rate + 34 + Math.random() * 12).toFixed(1),
+            anomaly_score: +(-0.68 - Math.random() * 0.2).toFixed(3),
+            severity: 'warning',
+            reason: `Tachycardia elevation exceeding personal resting baseline (+${(3.0 + Math.random() * 0.8).toFixed(1)}σ) during microgravity fluid redistribution.`,
+        },
+        {
+            metric: 'spo2', unit: '%',
+            value: +(91.0 + Math.random() * 2.2).toFixed(1),
+            anomaly_score: +(-0.73 - Math.random() * 0.16).toFixed(3),
+            severity: 'critical',
+            reason: 'Transient microgravity nocturnal hypoxemia event trapped below nominal 93% threshold during NREM sleep.',
+        },
+        {
+            metric: 'radiation_exposure', unit: 'mSv/day',
+            value: +(1.35 + Math.random() * 0.75).toFixed(2),
+            anomaly_score: +(-0.84 - Math.random() * 0.12).toFixed(3),
+            severity: 'critical',
+            reason: 'Dosimetric rate elevation exceeding 95th percentile baseline; evaluated against NASA career radiation standards.',
+        },
+        {
+            metric: 'systolic_bp', unit: 'mmHg',
+            value: +(astro.baseline_systolic_bp + 25 + Math.random() * 8).toFixed(1),
+            anomaly_score: +(-0.64 - Math.random() * 0.18).toFixed(3),
+            severity: 'warning',
+            reason: 'Post-EVA cephalad fluid shift induced systolic blood pressure orthostatic spike.',
+        },
+        {
+            metric: 'sleep_hours', unit: 'hrs',
+            value: +(4.2 + Math.random() * 1.0).toFixed(1),
+            anomaly_score: +(-0.60 - Math.random() * 0.15).toFixed(3),
+            severity: 'warning',
+            reason: 'Circadian misalignment and cumulative sleep debt accumulation flagging behavioral exhaustion threshold.',
+        },
+        {
+            metric: 'body_temp', unit: '°C',
+            value: +(astro.baseline_body_temp + 1.1 + Math.random() * 0.4).toFixed(1),
+            anomaly_score: +(-0.56 - Math.random() * 0.18).toFixed(3),
+            severity: 'warning',
+            reason: 'Microgravity exercise-induced thermal storage elevation with blunted evaporative sweat cooling.',
+        },
+        {
+            metric: 'resp_rate', unit: 'br/min',
+            value: +(21.5 + Math.random() * 3.0).toFixed(1),
+            anomaly_score: +(-0.53 - Math.random() * 0.15).toFixed(3),
+            severity: 'warning',
+            reason: 'Tachypneic excursion correlated with ambient habitat CO2 scrubber cycle 2 activation.',
+        },
+    ];
+
+    const results: any[] = [];
+    const now = Date.now();
+    for (let i = 0; i < targetCount; i++) {
+        const item = candidates[i % candidates.length];
+        const offsetMs = (i + 1) * (1800000 + Math.random() * 3600000);
+        const ts = new Date(now - offsetMs).toISOString();
+        results.push({
+            id: Date.now() + i,
+            reading_id: 100 + i,
+            run_id: runId,
+            timestamp: ts,
+            metric: item.metric,
+            value: item.value,
+            unit: item.unit,
+            anomaly_score: item.anomaly_score,
+            confidence_score: +(0.88 + Math.random() * 0.09).toFixed(2),
+            is_anomaly: true,
+            method: 'IsolationForest',
+            severity: item.severity,
+            notes: item.reason,
+            reason: item.reason,
+            created_at: ts,
+            astronaut_id: astronautId,
+        });
+    }
+
+    anomaliesDb[astronautId] = results;
+    return { runId, results };
+}
+
 const reportsDb: any[] = [];
 
 function parseBody(req: any): Promise<any> {
@@ -857,22 +951,21 @@ export function astroCareApiPlugin(): Plugin {
                 // 9. POST /api/analyze or /api/anomalies/analyze
                 if (req.method === 'POST' && (pathname === '/api/analyze' || pathname === '/api/anomalies/analyze')) {
                     const body = await parseBody(req);
-                    const contamination = body.contamination || 0.05;
+                    const contamination = parseFloat(body.contamination || searchParams.get('contamination') || '0.05');
                     const astronautId = body.astronaut_id || searchParams.get('astronaut_id') || 'ASTRO-01';
-                    const anoms = anomaliesDb[astronautId] || anomaliesDb['ASTRO-01'];
-                    const runId = 'RUN-' + Math.floor(1000 + Math.random() * 9000);
+                    const { runId, results } = generateAnomaliesForAstronaut(astronautId, contamination);
                     return sendJson(res, {
                         run_id: runId,
                         method: 'Multivariate Isolation Forest (100 Trees)',
                         records_analyzed: 500,
                         total_analyzed: 500,
-                        anomalies_found: anoms.length,
-                        anomalies_detected: anoms.length,
+                        anomalies_found: results.length,
+                        anomalies_detected: results.length,
                         anomaly_rate: contamination,
                         contamination_rate: contamination,
                         model_status: 'success',
-                        message: `Isolation Forest evaluated 500 telemetry records for ${astronautId}. ${anoms.length} anomalies detected.`,
-                        anomalies: anoms,
+                        message: `Isolation Forest evaluated 500 telemetry records for ${astronautId}. ${results.length} multivariate anomalies detected.`,
+                        anomalies: results,
                     });
                 }
 
