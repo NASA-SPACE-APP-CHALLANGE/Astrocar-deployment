@@ -6,8 +6,17 @@ import type {
     MissionReport, LoginResponse, SimulatorStatus, User
 } from '@/types';
 
-const rawBase = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
-const BASE = rawBase ? `${rawBase}/api` : '/api';
+const envUrl = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
+
+// Automatic resolution: if on Render and the URL is missing or points to the wrong domain without -yx04
+let targetBackend = envUrl;
+if (!targetBackend || targetBackend === 'https://astrocare-backend.onrender.com') {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+        targetBackend = 'https://astrocare-backend-yx04.onrender.com';
+    }
+}
+
+const BASE = targetBackend ? `${targetBackend}/api` : '/api';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
     const controller = new AbortController();
