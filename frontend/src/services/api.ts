@@ -10,12 +10,26 @@ const rawBase = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
 const BASE = rawBase ? `${rawBase}/api` : '/api';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(url, options);
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    try {
+        const res = await fetch(url, {
+            ...options,
+            signal: options?.signal || controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+        return res.json();
+    } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err?.name === 'AbortError') {
+            throw new Error('Connection timed out. Resumed in resilient mode.');
+        }
+        throw err;
     }
-    return res.json();
 }
 
 export const api = {
