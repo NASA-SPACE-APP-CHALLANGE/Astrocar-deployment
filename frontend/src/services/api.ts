@@ -8,12 +8,10 @@ import type {
 
 const envUrl = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
 
-// Automatic resolution: if on Render and the URL is missing or points to the wrong domain without -yx04
+// Automatic resolution: if on Render, always route to the live backend instance
 let targetBackend = envUrl;
-if (!targetBackend || targetBackend === 'https://astrocare-backend.onrender.com') {
-    if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-        targetBackend = 'https://astrocare-backend-yx04.onrender.com';
-    }
+if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    targetBackend = 'https://astrocare-backend-yx04.onrender.com';
 }
 
 const BASE = targetBackend ? `${targetBackend}/api` : '/api';

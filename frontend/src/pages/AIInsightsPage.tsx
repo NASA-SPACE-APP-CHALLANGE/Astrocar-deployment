@@ -117,6 +117,7 @@ export const AIInsightsPage: React.FC = () => {
     const [trends, setTrends] = useState<HealthTrendsResponse | null>(null);
 
     // Multi-parameter Risk Assessment Engine State
+    const [viewMode, setViewMode] = useState<'isolation_forest' | 'risk_engine' | 'nasa_hrp' | 'all'>('isolation_forest');
     const [risks, setRisks] = useState<MultiParameterRisk[]>(OFFICIAL_SPACEFLIGHT_RISKS);
     const [selectedHazardFilter, setSelectedHazardFilter] = useState<string>('ALL');
     const [expandedRiskId, setExpandedRiskId] = useState<string | null>(OFFICIAL_SPACEFLIGHT_RISKS[0].id);
@@ -140,23 +141,16 @@ export const AIInsightsPage: React.FC = () => {
     const runAnalysis = async () => {
         setLoading(true);
         setError(null);
+        setViewMode('isolation_forest');
         try {
             const res = await api.runAnomalyAnalysis(contamination, 500, activeAstronautId);
-            setResult(res);
-            if (res && Array.isArray(res.anomalies) && res.anomalies.length > 0) {
-                setExistingAnomalies(res.anomalies);
-            }
-            try {
-                const [updated, tr] = await Promise.all([
-                    api.anomalies(undefined, true, 50, activeAstronautId),
-                    api.healthTrends('7d', activeAstronautId),
-                ]);
-                if (Array.isArray(updated) && updated.length > 0) {
-                    setExistingAnomalies(updated);
+            if (res && res.model_status === 'success' && Array.isArray(res.anomalies)) {
+                setResult(res);
+                if (res.anomalies.length > 0) {
+                    setExistingAnomalies(res.anomalies);
                 }
-                if (tr) setTrends(tr);
-            } catch (secErr) {
-                console.warn('Secondary anomaly refresh deferred:', secErr);
+            } else {
+                throw new Error('Analysis response incomplete');
             }
         } catch (err: any) {
             console.warn('Backend analysis unavailable, executing client-side Isolation Forest simulation:', err);
@@ -270,6 +264,9 @@ export const AIInsightsPage: React.FC = () => {
             setExistingAnomalies(simulatedAnomalies);
         } finally {
             setLoading(false);
+            setTimeout(() => {
+                document.getElementById('isolation-forest-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 60);
         }
     };
 
@@ -318,17 +315,19 @@ export const AIInsightsPage: React.FC = () => {
                         <select
                             className="select"
                             style={{
-                                padding: '0.35rem 0.65rem',
-                                fontSize: '0.8rem',
+                                padding: '0.45rem 0.75rem',
+                                fontSize: '0.82rem',
                                 borderColor: 'rgba(146, 117, 255, 0.4)',
-                                color: 'var(--stellar-white)',
-                                background: 'rgba(11, 16, 38, 0.9)',
+                                color: '#F4F7FF',
+                                background: '#0B1026',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
                             }}
                             value={activeAstronautId}
                             onChange={e => setActiveAstronautId(e.target.value)}
                         >
                             {allAstronauts.map(a => (
-                                <option key={a.astronaut_id} value={a.astronaut_id}>
+                                <option key={a.astronaut_id} value={a.astronaut_id} style={{ background: '#0B1026', color: '#F4F7FF' }}>
                                     {a.name} ({a.astronaut_id})
                                 </option>
                             ))}
@@ -341,14 +340,23 @@ export const AIInsightsPage: React.FC = () => {
                         </label>
                         <select
                             className="select"
-                            style={{ width: 80, padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                            style={{
+                                width: 130,
+                                padding: '0.45rem 0.65rem',
+                                fontSize: '0.82rem',
+                                borderColor: 'rgba(146, 117, 255, 0.4)',
+                                color: '#F4F7FF',
+                                background: '#0B1026',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                            }}
                             value={contamination}
                             onChange={e => setContamination(Number(e.target.value))}
                         >
-                            <option value={0.02}>2% (Strict)</option>
-                            <option value={0.05}>5% (Standard)</option>
-                            <option value={0.10}>10% (High)</option>
-                            <option value={0.15}>15% (Ultra)</option>
+                            <option value={0.02} style={{ background: '#0B1026', color: '#F4F7FF' }}>2% (Strict)</option>
+                            <option value={0.05} style={{ background: '#0B1026', color: '#F4F7FF' }}>5% (Standard)</option>
+                            <option value={0.10} style={{ background: '#0B1026', color: '#F4F7FF' }}>10% (High)</option>
+                            <option value={0.15} style={{ background: '#0B1026', color: '#F4F7FF' }}>15% (Ultra)</option>
                         </select>
                     </div>
                     <button
@@ -356,7 +364,7 @@ export const AIInsightsPage: React.FC = () => {
                         className="btn btn-violet"
                         onClick={runAnalysis}
                         disabled={loading}
-                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 1rem', cursor: loading ? 'wait' : 'pointer' }}
                     >
                         {loading ? <RefreshCw size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Play size={14} />}
                         {loading ? 'Analyzing Telemetry...' : 'RUN ISOLATION FOREST'}
@@ -374,15 +382,240 @@ export const AIInsightsPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Disclaimer Banner */}
-            <div className="glass-card" style={{ padding: '0.75rem 1rem', background: 'rgba(146,117,255,0.06)', border: '1px solid rgba(146,117,255,0.2)' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                    <Info size={15} color="var(--aurora-violet)" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <p style={{ fontSize: '0.78rem', margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                        <strong style={{ color: 'var(--aurora-violet)' }}>Biomedical Research Notice:</strong> Unsupervised machine learning models statistical deviations in simulated spaceflight telemetry. Anomaly scores reflect multivariate divergence, not automatic medical diagnoses. All clinical interventions and mission countermeasures require validation by the Flight Surgeon Console.
-                    </p>
-                </div>
+            {/* View Mode Section Tabs */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid rgba(145, 160, 190, 0.15)', paddingBottom: '0.75rem' }}>
+                <button
+                    onClick={() => setViewMode('isolation_forest')}
+                    className={`btn btn-sm ${viewMode === 'isolation_forest' ? 'btn-violet' : 'btn-ghost'}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                >
+                    <Play size={13} />
+                    <span>⚡ Isolation Forest ML Analysis</span>
+                    {result && <span className="badge badge-success" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Ready</span>}
+                </button>
+
+                <button
+                    onClick={() => setViewMode('risk_engine')}
+                    className={`btn btn-sm ${viewMode === 'risk_engine' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                >
+                    <ShieldAlert size={13} />
+                    <span>🛡 Multi-Parameter Risk Engine</span>
+                </button>
+
+                <button
+                    onClick={() => setViewMode('nasa_hrp')}
+                    className={`btn btn-sm ${viewMode === 'nasa_hrp' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                >
+                    <BookOpen size={13} />
+                    <span> NASA HRP Risk Modules</span>
+                </button>
+
+                <button
+                    onClick={() => setViewMode('all')}
+                    className={`btn btn-sm ${viewMode === 'all' ? 'btn-secondary' : 'btn-ghost'}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                >
+                    <span>👁 Show All Sections</span>
+                </button>
             </div>
+
+            {/* SECTION 1: Isolation Forest ML Analytics Dashboard */}
+            {(viewMode === 'isolation_forest' || viewMode === 'all') && (
+                <div id="isolation-forest-results" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    {loading && (
+                        <div className="glass-card" style={{ padding: '1rem 1.25rem', background: 'rgba(146,117,255,0.12)', border: '1px solid rgba(146,117,255,0.4)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <RefreshCw size={18} color="var(--aurora-violet)" style={{ animation: 'spin 0.8s linear infinite' }} />
+                            <span style={{ fontSize: '0.88rem', color: 'var(--stellar-white)', fontWeight: 600 }}>
+                                Executing Multivariate Isolation Forest (100 Trees) across 500 telemetry records for {activeAstronaut?.name || activeAstronautId}...
+                            </span>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="glass-card" style={{ padding: '1rem', background: 'rgba(255,100,124,0.08)', border: '1px solid rgba(255,100,124,0.25)' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', color: 'var(--critical-coral)', alignItems: 'center' }}>
+                                <XCircle size={16} /> <span style={{ fontSize: '0.9rem' }}>{error}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Model Run Status Summary Banner */}
+                    <div className="glass-card" style={{ padding: '1rem 1.25rem', background: 'rgba(93,242,180,0.06)', border: '1px solid rgba(93,242,180,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <CheckCircle size={18} color="var(--success-mint)" />
+                            <span style={{ fontSize: '0.88rem', fontFamily: 'var(--font-mono)', color: 'var(--success-mint)', fontWeight: 600 }}>
+                                {result ? result.message : `Isolation Forest Model initialized. Ready to evaluate 500 telemetry records for ${activeAstronaut?.name || activeAstronautId}.`}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span className="badge badge-violet">RUN: {result?.run_id || 'READY-ID'}</span>
+                            <span className="badge badge-cyan">{result?.method || 'IsolationForest'}</span>
+                        </div>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                        {[
+                            { label: 'Detection Method', val: result?.method || 'IsolationForest (100 Trees)', color: 'var(--aurora-violet)' },
+                            { label: 'Model Status', val: result?.model_status?.replace('_', ' ').toUpperCase() || 'READY', color: result?.model_status === 'success' ? 'var(--success-mint)' : 'var(--text-muted)' },
+                            {
+                                label: 'Records Analyzed',
+                                val: (result?.records_analyzed ?? (result as any)?.total_analyzed ?? 500).toLocaleString(),
+                                color: 'var(--electric-cyan)',
+                            },
+                            {
+                                label: 'Anomalies Detected',
+                                val: String(result?.anomalies_found ?? (result as any)?.anomalies_detected ?? result?.anomalies?.length ?? existingAnomalies.length),
+                                color: 'var(--warning-amber)',
+                            },
+                            {
+                                label: 'Anomaly Rate',
+                                val: `${(((result?.anomaly_rate ?? (result as any)?.contamination_rate ?? contamination)) * 100).toFixed(1)}%`,
+                                color: 'var(--critical-coral)',
+                            },
+                        ].map(item => (
+                            <div key={item.label} className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
+                                <div className="telemetry-label" style={{ marginBottom: '0.4rem' }}>{item.label}</div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700, color: item.color }}>
+                                    {item.val}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Charts Row */}
+                    {flaggedAnomalies.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
+                            {metricBarData.length > 0 && (
+                                <div className="glass-card" style={{ padding: '1.25rem' }}>
+                                    <h4 style={{ marginBottom: '1rem' }}>Anomalies by Metric</h4>
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={metricBarData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(145,160,190,0.1)" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
+                                            <YAxis tick={{ fontSize: 11, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
+                                            <Tooltip
+                                                contentStyle={{ background: '#0B1026', border: '1px solid rgba(83,231,255,0.2)', borderRadius: 8 }}
+                                                labelStyle={{ color: '#F4F7FF', fontFamily: 'JetBrains Mono', fontSize: 12 }}
+                                                itemStyle={{ color: '#9275FF' }}
+                                            />
+                                            <Bar dataKey="count" fill="#9275FF" radius={[4, 4, 0, 0]}>
+                                                {metricBarData.map((_, i) => (
+                                                    <Cell key={i} fill={['#9275FF', '#53E7FF', '#FF647C', '#FFCA72', '#5DF2B4', '#9275FF'][i % 6]} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
+
+                            <div className="glass-card" style={{ padding: '1.25rem' }}>
+                                <h4 style={{ marginBottom: '0.75rem' }}>Anomaly Score Distribution</h4>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                                    Decision function scores. Lower (&lt; 0) indicates multivariate statistical divergence.
+                                </p>
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <ScatterChart>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(145,160,190,0.1)" />
+                                        <XAxis dataKey="score" name="Score" tick={{ fontSize: 10, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
+                                        <YAxis dataKey="idx" hide />
+                                        <Tooltip
+                                            contentStyle={{ background: '#0B1026', border: '1px solid rgba(83,231,255,0.2)', borderRadius: 8 }}
+                                            itemStyle={{ color: '#9275FF', fontFamily: 'JetBrains Mono', fontSize: 11 }}
+                                            cursor={{ strokeDasharray: '3 3', stroke: 'rgba(83,231,255,0.3)' }}
+                                        />
+                                        <Scatter
+                                            data={flaggedAnomalies.map((a, i) => ({ score: a.anomaly_score ?? 0, idx: i, anom: a.is_anomaly ? 1 : 0 }))}
+                                            shape={(props: any) => {
+                                                const { cx, cy, payload } = props || {};
+                                                const color = payload?.anom ? '#FF647C' : '#53E7FF';
+                                                return <circle cx={cx} cy={cy} r={4} fill={color} opacity={0.7} />;
+                                            }}
+                                        />
+                                    </ScatterChart>
+                                </ResponsiveContainer>
+                                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                                    <span><span style={{ color: '#FF647C' }}>●</span> Outlier Flag</span>
+                                    <span><span style={{ color: '#53E7FF' }}>●</span> Baseline Normal</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Flagged Observations Log Table */}
+                    <div className="glass-card" style={{ padding: '1.25rem', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h4 style={{ margin: 0 }}>
+                                Flagged Observations Log
+                                <span style={{ marginLeft: '0.75rem', fontSize: '0.8rem', color: 'var(--warning-amber)', fontFamily: 'var(--font-mono)' }}>
+                                    ({flaggedAnomalies.length} observations)
+                                </span>
+                            </h4>
+                        </div>
+
+                        {loadingExisting && !result ? (
+                            <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+                        ) : flaggedAnomalies.length === 0 ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                <Brain size={32} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.3 }} />
+                                Click "RUN ISOLATION FOREST" above to analyze stored telemetry.
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>Deviating Indicator</th>
+                                            <th>Observed Value</th>
+                                            <th>Score</th>
+                                            <th>Model Method</th>
+                                            <th>Explanation & Feature Attribution</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {flaggedAnomalies.slice(0, 50).map(a => (
+                                            <tr key={a.id}>
+                                                <td className="mono-val">{new Date(a.timestamp).toLocaleString()}</td>
+                                                <td>
+                                                    {a.metric ? (
+                                                        <span className="badge badge-warning">{METRIC_LABELS[a.metric] || a.metric}</span>
+                                                    ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                                </td>
+                                                <td className="mono-val">
+                                                    {a.value != null && typeof a.value === 'number' ? `${a.value.toFixed(2)} ${a.unit || ''}` : '—'}
+                                                </td>
+                                                <td><ScoreBar score={a.anomaly_score} /></td>
+                                                <td>
+                                                    <span className="badge badge-violet">{a.method || '—'}</span>
+                                                </td>
+                                                <td style={{ maxWidth: 360, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                                                    {a.reason || 'Flagged by multivariate Isolation Forest decision threshold.'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION 2: Multi-Parameter Risk Assessment Engine */}
+            {(viewMode === 'risk_engine' || viewMode === 'all') && (
+                <>
+                    {/* Disclaimer Banner */}
+                    <div className="glass-card" style={{ padding: '0.75rem 1rem', background: 'rgba(146,117,255,0.06)', border: '1px solid rgba(146,117,255,0.2)' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                            <Info size={15} color="var(--aurora-violet)" style={{ flexShrink: 0, marginTop: 2 }} />
+                            <p style={{ fontSize: '0.78rem', margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                <strong style={{ color: 'var(--aurora-violet)' }}>Biomedical Research Notice:</strong> Unsupervised machine learning models statistical deviations in simulated spaceflight telemetry. Anomaly scores reflect multivariate divergence, not automatic medical diagnoses. All clinical interventions and mission countermeasures require validation by the Flight Surgeon Console.
+                            </p>
+                        </div>
+                    </div>
 
             {/* SECTION: Intelligent Multi-Parameter Risk Assessment Engine (Prompt Requirement 6 & 7) */}
             <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(83, 231, 255, 0.25)' }}>
@@ -700,176 +933,11 @@ export const AIInsightsPage: React.FC = () => {
                     </p>
                 </div>
             </div>
-
-            {error && (
-                <div className="glass-card" style={{ padding: '1rem', background: 'rgba(255,100,124,0.08)', border: '1px solid rgba(255,100,124,0.25)' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', color: 'var(--critical-coral)', alignItems: 'center' }}>
-                        <XCircle size={16} /> <span style={{ fontSize: '0.9rem' }}>{error}</span>
-                    </div>
-                </div>
+            </>
             )}
 
-            {/* Model Run Status Summary */}
-            {result && (
-                <div className="glass-card" style={{ padding: '1rem', background: 'rgba(93,242,180,0.06)', border: '1px solid rgba(93,242,180,0.2)' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <CheckCircle size={16} color="var(--success-mint)" />
-                        <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', color: 'var(--success-mint)' }}>
-                            {result.message}
-                        </span>
-                        <span className="badge badge-violet" style={{ marginLeft: 'auto' }}>RUN: {result.run_id}</span>
-                    </div>
-                </div>
-            )}
-
-            {/* Stats row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-                {[
-                    { label: 'Detection Method', val: result?.method || 'IsolationForest', color: 'var(--aurora-violet)' },
-                    { label: 'Model Status', val: result?.model_status?.replace('_', ' ').toUpperCase() || 'READY', color: result?.model_status === 'success' ? 'var(--success-mint)' : 'var(--text-muted)' },
-                    {
-                        label: 'Records Analyzed',
-                        val: (result?.records_analyzed ?? (result as any)?.total_analyzed ?? 500).toLocaleString(),
-                        color: 'var(--electric-cyan)',
-                    },
-                    {
-                        label: 'Anomalies Detected',
-                        val: String(result?.anomalies_found ?? (result as any)?.anomalies_detected ?? result?.anomalies?.length ?? existingAnomalies.length),
-                        color: 'var(--warning-amber)',
-                    },
-                    {
-                        label: 'Anomaly Rate',
-                        val: `${(((result?.anomaly_rate ?? (result as any)?.contamination_rate ?? contamination)) * 100).toFixed(1)}%`,
-                        color: 'var(--critical-coral)',
-                    },
-                ].map(item => (
-                    <div key={item.label} className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
-                        <div className="telemetry-label" style={{ marginBottom: '0.4rem' }}>{item.label}</div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700, color: item.color }}>
-                            {item.val}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Charts row */}
-            {flaggedAnomalies.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
-                    {metricBarData.length > 0 && (
-                        <div className="glass-card" style={{ padding: '1.25rem' }}>
-                            <h4 style={{ marginBottom: '1rem' }}>Anomalies by Metric</h4>
-                            <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={metricBarData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(145,160,190,0.1)" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
-                                    <YAxis tick={{ fontSize: 11, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
-                                    <Tooltip
-                                        contentStyle={{ background: '#0B1026', border: '1px solid rgba(83,231,255,0.2)', borderRadius: 8 }}
-                                        labelStyle={{ color: '#F4F7FF', fontFamily: 'JetBrains Mono', fontSize: 12 }}
-                                        itemStyle={{ color: '#9275FF' }}
-                                    />
-                                    <Bar dataKey="count" fill="#9275FF" radius={[4, 4, 0, 0]}>
-                                        {metricBarData.map((_, i) => (
-                                            <Cell key={i} fill={['#9275FF', '#53E7FF', '#FF647C', '#FFCA72', '#5DF2B4', '#9275FF'][i % 6]} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    )}
-
-                    <div className="glass-card" style={{ padding: '1.25rem' }}>
-                        <h4 style={{ marginBottom: '0.75rem' }}>Anomaly Score Distribution</h4>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                            Decision function scores. Lower (&lt; 0) indicates multivariate statistical divergence.
-                        </p>
-                        <ResponsiveContainer width="100%" height={180}>
-                            <ScatterChart>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(145,160,190,0.1)" />
-                                <XAxis dataKey="score" name="Score" tick={{ fontSize: 10, fill: '#91A0BE', fontFamily: 'JetBrains Mono' }} />
-                                <YAxis dataKey="idx" hide />
-                                <Tooltip
-                                    contentStyle={{ background: '#0B1026', border: '1px solid rgba(83,231,255,0.2)', borderRadius: 8 }}
-                                    itemStyle={{ color: '#9275FF', fontFamily: 'JetBrains Mono', fontSize: 11 }}
-                                    cursor={{ strokeDasharray: '3 3', stroke: 'rgba(83,231,255,0.3)' }}
-                                />
-                                <Scatter
-                                    data={flaggedAnomalies.map((a, i) => ({ score: a.anomaly_score ?? 0, idx: i, anom: a.is_anomaly ? 1 : 0 }))}
-                                    shape={(props: any) => {
-                                        const { cx, cy, payload } = props || {};
-                                        const color = payload?.anom ? '#FF647C' : '#53E7FF';
-                                        return <circle cx={cx} cy={cy} r={4} fill={color} opacity={0.7} />;
-                                    }}
-                                />
-                            </ScatterChart>
-                        </ResponsiveContainer>
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                            <span><span style={{ color: '#FF647C' }}>●</span> Outlier Flag</span>
-                            <span><span style={{ color: '#53E7FF' }}>●</span> Baseline Normal</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Flagged Observations Table */}
-            <div className="glass-card" style={{ padding: '1.25rem', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h4 style={{ margin: 0 }}>
-                        Flagged Observations Log
-                        <span style={{ marginLeft: '0.75rem', fontSize: '0.8rem', color: 'var(--warning-amber)', fontFamily: 'var(--font-mono)' }}>
-                            ({flaggedAnomalies.length} observations)
-                        </span>
-                    </h4>
-                </div>
-
-                {loadingExisting && !result ? (
-                    <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-                ) : flaggedAnomalies.length === 0 ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        <Brain size={32} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.3 }} />
-                        Click "RUN ISOLATION FOREST" above to analyze stored telemetry.
-                    </div>
-                ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>Deviating Indicator</th>
-                                    <th>Observed Value</th>
-                                    <th>Score</th>
-                                    <th>Model Method</th>
-                                    <th>Explanation & Feature Attribution</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {flaggedAnomalies.slice(0, 50).map(a => (
-                                    <tr key={a.id}>
-                                        <td className="mono-val">{new Date(a.timestamp).toLocaleString()}</td>
-                                        <td>
-                                            {a.metric ? (
-                                                <span className="badge badge-warning">{METRIC_LABELS[a.metric] || a.metric}</span>
-                                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                                        </td>
-                                        <td className="mono-val">
-                                            {a.value != null && typeof a.value === 'number' ? `${a.value.toFixed(2)} ${a.unit || ''}` : '—'}
-                                        </td>
-                                        <td><ScoreBar score={a.anomaly_score} /></td>
-                                        <td>
-                                            <span className="badge badge-violet">{a.method || '—'}</span>
-                                        </td>
-                                        <td style={{ maxWidth: 360, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                                            {a.reason || 'Flagged by multivariate Isolation Forest decision threshold.'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-
-            {/* SECTION: 12 Official NASA Human Spaceflight Risk Modules (Part 5 Requirement) */}
+            {/* SECTION 3: 12 Official NASA Human Spaceflight Risk Modules (Part 5 Requirement) */}
+            {(viewMode === 'nasa_hrp' || viewMode === 'all') && (
             <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(146, 117, 255, 0.25)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                     <div>
@@ -1010,6 +1078,7 @@ export const AIInsightsPage: React.FC = () => {
                     })}
                 </div>
             </div>
+            )}
 
             {/* Symptom Checker Modal */}
             <SymptomCheckerModal
