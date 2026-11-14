@@ -105,9 +105,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const [activeAstronautId, setActiveAstronautId] = useState<string>('ASTRO-01');
-    const [allAstronauts, setAllAstronauts] = useState<Astronaut[]>([]);
-    const [activeAstronaut, setActiveAstronaut] = useState<Astronaut | null>(null);
-    const [isLoadingAstronauts, setIsLoadingAstronauts] = useState<boolean>(true);
+    const [allAstronauts, setAllAstronauts] = useState<Astronaut[]>(() => {
+        try {
+            const raw = localStorage.getItem('astrocare_cached_astronauts');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch {
+            // fallback to default
+        }
+        return DEFAULT_MISSION_ASTRONAUTS;
+    });
+    const [activeAstronaut, setActiveAstronaut] = useState<Astronaut | null>(() => {
+        return DEFAULT_MISSION_ASTRONAUTS[0];
+    });
+    const [isLoadingAstronauts, setIsLoadingAstronauts] = useState<boolean>(false);
     const [astronautsError, setAstronautsError] = useState<string | null>(null);
 
     // In-flight guard to prevent duplicate API requests
@@ -209,6 +222,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('astrovital_user');
     }, []);
 
+    const handleSetActiveAstronautId = useCallback((id: string) => {
+        setActiveAstronautId(id);
+        const match = allAstronauts.find(a => a.astronaut_id === id);
+        if (match) {
+            setActiveAstronaut(match);
+        }
+    }, [allAstronauts]);
+
     const contextValue = useMemo(() => ({
         user,
         activeAstronautId,
@@ -219,10 +240,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         loginAsRole,
         logout,
-        setActiveAstronautId,
+        setActiveAstronautId: handleSetActiveAstronautId,
         refreshAstronauts,
         retryLoadAstronauts,
-    }), [user, activeAstronautId, activeAstronaut, allAstronauts, isLoadingAstronauts, astronautsError, login, loginAsRole, logout, setActiveAstronautId, refreshAstronauts, retryLoadAstronauts]);
+    }), [user, activeAstronautId, activeAstronaut, allAstronauts, isLoadingAstronauts, astronautsError, login, loginAsRole, logout, handleSetActiveAstronautId, refreshAstronauts, retryLoadAstronauts]);
 
     return (
         <AuthContext.Provider value={contextValue}>

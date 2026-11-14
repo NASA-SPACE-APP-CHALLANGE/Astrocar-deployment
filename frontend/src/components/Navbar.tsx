@@ -123,7 +123,6 @@ export const Navbar: React.FC = () => {
                             className="btn btn-ghost btn-icon show-mobile-only"
                             onClick={() => setMobileOpen(!mobileOpen)}
                             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-                            style={{ display: 'none' }}
                         >
                             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
                         </button>
